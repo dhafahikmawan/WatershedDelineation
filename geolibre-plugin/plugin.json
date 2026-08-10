@@ -3,6 +3,6 @@
   "name": "GeoLibre Watershed Delineation",
   "version": "0.1.0",
   "entry": "dist/index.js",
-  "description": "A starter GeoLibre plugin bundle with a MapLibre control.",
+  "description": "Client-side watershed delineation from GeoTIFF DEMs: sink-fill, D8 flow, channel extraction, subbasin vectorisation, and elevation statistics.",
   "style": "dist/style.css"
 }

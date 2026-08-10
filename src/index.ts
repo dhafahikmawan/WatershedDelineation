@@ -30,10 +30,10 @@ export type {
   GeoLibreFloatingPanelRegistration,
 } from './lib/geolibre/host-api';
 
-// GeoLibre plugin UI surface demonstrations
+// Watershed Delineation panel
 export {
   RIGHT_PANEL_ID,
-  registerTemplateRightPanel,
+  registerWatershedRightPanel,
 } from './lib/geolibre/right-panel';
 export {
   FLOATING_PANEL_ID,
