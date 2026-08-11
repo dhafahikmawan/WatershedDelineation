@@ -34,7 +34,7 @@ let disposeRightPanel: (() => void) | null = null;
 
 export const plugin: GeoLibrePlugin = {
   id: 'watershed-delineation',
-  name: 'Watershed Delineation',
+  name: 'GeoLibre Watershed Delineation',
   version: '0.1.0',
 
   activate(app: GeoLibreAppAPI) {

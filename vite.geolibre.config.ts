@@ -55,6 +55,7 @@ export default defineConfig({
       external: [],
       output: {
         assetFileNames: () => "style.css",
+        codeSplitting: false,
       },
     },
     cssCodeSplit: false,

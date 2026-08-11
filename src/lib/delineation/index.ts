@@ -10,6 +10,8 @@
  *   - Terminates the worker and throws on errors.
  */
 
+import DelineationWorker from './delineation.worker?worker&inline';
+
 export interface DemData {
   width: number;
   height: number;
@@ -41,10 +43,7 @@ let _worker: Worker | null = null;
 /** Lazily create the delineation web worker. */
 function getWorker(): Worker {
   if (!_worker) {
-    _worker = new Worker(
-      new URL('./delineation.worker.ts', import.meta.url),
-      { type: 'module' },
-    );
+    _worker = new DelineationWorker();
   }
   return _worker;
 }
