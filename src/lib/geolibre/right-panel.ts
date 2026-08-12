@@ -34,7 +34,7 @@ import {
 // ---------------------------------------------------------------------------
 // Constants (developer-controlled limits)
 // ---------------------------------------------------------------------------
-const MAX_DEM_PIXELS = 4_194_304; // 2048 × 2048
+const MAX_DEM_PIXELS = 16_777_216; // 4096 × 4096
 const MAX_FILE_SIZE_MB = 50;
 
 /** Stable panel ID — used by geolibre.ts to open/close the panel. */
