@@ -25,18 +25,18 @@ export function writeFloat32GeoTIFF(
   // -----------------------------------------------------------------------
   // Memory layout (all offsets aligned to 8-byte boundaries):
   //   0       - TIFF header (8 bytes)
-  //   8       - IFD: 2-byte entry count + 12 entries * 12 bytes + 4-byte next-IFD = 162 bytes
-  //   160     - ModelPixelScale data (3 × float64 = 24 bytes)
-  //   184     - ModelTiepoint data   (6 × float64 = 48 bytes)
-  //   232     - GeoKeyDirectory      (16 × uint16  = 32 bytes)
-  //   264     - Pixel data           (width * height * 4 bytes)
+  //   8       - IFD: 2-byte entry count + 13 entries * 12 bytes + 4-byte next-IFD = 168 bytes
+  //   176     - ModelPixelScale data (3 × float64 = 24 bytes)
+  //   200     - ModelTiepoint data   (6 × float64 = 48 bytes)
+  //   248     - GeoKeyDirectory      (16 × uint16  = 32 bytes)
+  //   280     - Pixel data           (width * height * 4 bytes)
   // -----------------------------------------------------------------------
-  const ifdEntriesCount = 12;
-  const pixelScaleOffset = 160;
-  const tiepointOffset = pixelScaleOffset + 3 * 8; // 184
+  const ifdEntriesCount = 13;
+  const pixelScaleOffset = 176;
+  const tiepointOffset = pixelScaleOffset + 3 * 8; // 200
   const geokeysCount = 16; // 4-word header + 3 keys × 4 words each
-  const geokeysOffset = tiepointOffset + 6 * 8; // 232
-  const pixelDataOffset = geokeysOffset + geokeysCount * 2; // 264
+  const geokeysOffset = tiepointOffset + 6 * 8; // 248
+  const pixelDataOffset = geokeysOffset + geokeysCount * 2; // 280
 
   const totalSize = pixelDataOffset + width * height * 4;
   const buffer = new ArrayBuffer(totalSize);
@@ -88,6 +88,7 @@ export function writeFloat32GeoTIFF(
   writeTag(259, 3, 1, 1); // Compression = No compression  (SHORT)
   writeTag(262, 3, 1, 1); // PhotometricInterpretation = BlackIsZero  (SHORT)
   writeTag(273, 4, 1, pixelDataOffset); // StripOffsets -> pixel data area  (LONG)
+  writeTag(277, 3, 1, 1); // SamplesPerPixel = 1  (SHORT)
   writeTag(278, 4, 1, height); // RowsPerStrip = all rows  (LONG)
   writeTag(279, 4, 1, width * height * 4); // StripByteCounts  (LONG)
   writeTag(339, 3, 1, 3); // SampleFormat = 3 (IEEE floating point)  (SHORT)
