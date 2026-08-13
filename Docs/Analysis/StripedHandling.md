@@ -10,7 +10,7 @@ This document describes how the Watershed Delineation plugin natively handles th
 GeoLibre uses `addCogLayer` (which relies on `geotiff.js` and MapLibre's COG source internally) to render raster layers on the map canvas. 
 - A standard **striped raster** (or scanline-oriented TIFF) organizes pixel data row-by-row. Reading arbitrary spatial bounding boxes from a striped TIFF requires loading large portions of the file, causing high memory usage and latency.
 - A **tiled raster** divides the image into uniform rectangular blocks (tiles), allowing the client to selectively request and decode only the tiles covering the visible viewport.
-- If a plugin attempts to output a striped GeoTIFF, `geotiff.js` or the COG source will fail to load or fail to display the raster layer dynamically.
+- If a user/plugin attempts to output a striped GeoTIFF, `geotiff.js` or the COG source will fail to load or fail to display the raster layer dynamically.
 
 ### The Client-Side Constraint
 To maintain a serverless, offline-capable architecture that works seamlessly on both GeoLibre Desktop (Tauri) and the Web App, the conversion must run entirely in the browser thread or a Web Worker. Wrapping external tools like GDAL (`gdal_translate`) is not feasible due to binary packaging size constraints.
