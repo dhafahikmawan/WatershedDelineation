@@ -10,7 +10,7 @@ This document describes how the Watershed Delineation plugin natively handles th
 GeoLibre uses `addCogLayer` (which relies on `geotiff.js` and MapLibre's COG source internally) to render raster layers on the map canvas. 
 - A standard **striped raster** (or scanline-oriented TIFF) organizes pixel data row-by-row. Reading arbitrary spatial bounding boxes from a striped TIFF requires loading large portions of the file, causing high memory usage and latency.
 - A **tiled raster** divides the image into uniform rectangular blocks (tiles), allowing the client to selectively request and decode only the tiles covering the visible viewport.
-- If a user/plugin attempts to output a striped GeoTIFF, `geotiff.js` or the COG source will fail to load or fail to display the raster layer dynamically.
+- If a plugin attempts to output a striped GeoTIFF, `geotiff.js` or the COG source will fail to load or fail to display the raster layer dynamically.
 
 ### The Client-Side Constraint
 To maintain a serverless, offline-capable architecture that works seamlessly on both GeoLibre Desktop (Tauri) and the Web App, the conversion must run entirely in the browser thread or a Web Worker. Wrapping external tools like GDAL (`gdal_translate`) is not feasible due to binary packaging size constraints.
@@ -22,11 +22,75 @@ Therefore, the plugin implements a **manual binary GeoTIFF writer** that builds 
 ## 2. Dependencies
 
 - **Runtime Dependencies**: **None**. The encoder is built using vanilla TypeScript/JavaScript leveraging standard browser APIs (`ArrayBuffer`, `DataView`, `Blob`).
-- **Validation Dependencies**: `geotiff.js` is utilized in tests to verify that the generated binary structure meets standard specifications.
+- **Validation/Reading Dependencies**: `geotiff.js` is utilized in tests and in the plugin UI to parse and read incoming GeoTIFF layers.
 
 ---
 
-## 3. Tiled TIFF Binary Structure
+## 3. Reference: How the Plugin Reads Raster Files
+
+Before writing tiled GeoTIFFs, the plugin must load and parse input DEM files selected by the user. This is done entirely client-side using `geotiff.js`.
+
+### Step-by-Step Raster Parsing Pipeline
+1. **Load Blob**: Parse the input file blob using `fromBlob(file)`.
+2. **Retrieve Image**: Get the primary image directory (first page) using `tiff.getImage()`.
+3. **Read Pixel Data**: Extract raw pixels into a flattened typed array using `image.readRasters({ interleave: true })` and coerce it to a `Float32Array`.
+4. **Extract Metadata**: Query the TIFF file directory directory tags using `image.getFileDirectory()` to retrieve coordinate transformation, NoData value, and projection information.
+
+### Reading Code Implementation
+The reading logic is structured inside [`right-panel.ts`](file:///c:/Users/erwin/OneDrive/Documents/Learning/Plugin%20Spatio/WatershedDelineation/src/lib/geolibre/right-panel.ts):
+
+```typescript
+import { fromBlob } from 'geotiff';
+
+// 1. Open the file blob
+const tiff = await fromBlob(file);
+const image = await tiff.getImage();
+const width = image.getWidth();
+const height = image.getHeight();
+
+// 2. Read the raster data array
+const rasters = await image.readRasters({ interleave: true });
+// Coerce geotiff.js typed array wrapper to Float32Array
+const rawRaster = rasters as unknown as { [index: number]: number } & { length: number };
+const elevation = new Float32Array(rawRaster.length);
+for (let i = 0; i < rawRaster.length; i++) {
+  elevation[i] = rawRaster[i];
+}
+
+// 3. Extract metadata tags
+const fd = image.getFileDirectory() as unknown as Record<string, unknown>;
+
+// NoData Value (GDAL_NODATA tag 42113)
+const noDataValue = fd['GDAL_NODATA'] != null ? parseFloat(String(fd['GDAL_NODATA'])) : -9999;
+
+// Spatial Geotransform (ModelPixelScale and ModelTiepoint tags)
+const pixelScale = fd['ModelPixelScale'] as number[] | undefined;
+const tiepoint = fd['ModelTiepoint'] as number[] | undefined;
+const scaleX = pixelScale ? pixelScale[0] : 1.0;
+const scaleY = pixelScale ? -pixelScale[1] : -1.0; // South-positive to negative scale
+const originX = tiepoint ? tiepoint[3] : 0.0;
+const originY = tiepoint ? tiepoint[4] : 0.0;
+const geotransform = [originX, scaleX, 0, originY, 0, scaleY];
+
+// 4. Extract EPSG code from GeoKeyDirectory (Tag 34735)
+const geoKeys = fd['GeoKeyDirectory'] as number[] | undefined;
+let crsCode = 3857; // Default fallback to Web Mercator
+if (geoKeys) {
+  const numKeys = geoKeys[3];
+  for (let i = 0; i < numKeys; i++) {
+    const keyId = geoKeys[4 + i * 4];
+    // 3072 = ProjectedCSTypeGeoKey, 2048 = GeographicTypeGeoKey
+    if (keyId === 3072 || keyId === 2048) {
+      crsCode = geoKeys[4 + i * 4 + 3];
+      break;
+    }
+  }
+}
+```
+
+---
+
+## 4. Tiled TIFF Binary Structure
 
 The generated file follows the standard TIFF specifications but enforces a tiled layout instead of a striped layout.
 
@@ -67,7 +131,7 @@ TIFF specification requires that **all tags be sorted in ascending numerical ord
 
 ---
 
-## 4. Memory Layout & 8-Byte Alignment
+## 5. Memory Layout & 8-Byte Alignment
 
 To prevent alignment faults on architectures that strictly enforce typed array addresses (especially Float64 and Float32 views), all multi-byte metadata structures and arrays must start on 8-byte boundary alignments.
 
@@ -97,7 +161,7 @@ To prevent alignment faults on architectures that strictly enforce typed array a
 
 ---
 
-## 5. Implementation Issue: Single-Tile Offset Handling
+## 6. Implementation Issue: Single-Tile Offset Handling
 
 During implementation, a critical issue arose regarding how TIFF parsers (such as `geotiff.js`) handle single-tile layouts versus multi-tile layouts.
 
@@ -128,7 +192,7 @@ writeTag(325, 4, numTiles, numTiles === 1 ? singleTileBytes : tileByteCountsOffs
 
 ---
 
-## 6. Tile-Major Pixel Reordering Algorithm
+## 7. Tile-Major Pixel Reordering Algorithm
 
 The input elevation array is a standard row-major (scanline) contiguous Float32 array representing the raster from top-left to bottom-right. 
 
@@ -164,7 +228,7 @@ Tile-Major Output Structure:
 
 ---
 
-## 7. Reference Implementation
+## 8. Reference Implementation
 
 Below is the annotated TypeScript implementation for writing a tiled Float32 GeoTIFF. 
 
@@ -314,7 +378,7 @@ export function writeFloat32GeoTIFF(
 
 ---
 
-## 8. Porting Guide for Other Geolibre Plugins
+## 9. Porting Guide for Other Geolibre Plugins
 
 When adapting this conversion mechanism to other plugins, keep the following considerations in mind:
 
