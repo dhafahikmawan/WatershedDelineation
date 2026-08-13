@@ -129,6 +129,22 @@
   text-align: right;
 }
 
+.wd-threshold-control {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+}
+
+.wd-threshold-control .wd-input[type='range'] {
+  flex: 1 1 auto;
+}
+
+.wd-threshold-control .wd-input[type='number'] {
+  flex: 0 0 80px;
+  max-width: 80px;
+}
+
 /* ---- Buttons ----------------------------------------------------------- */
 .wd-btn {
   display: inline-flex;

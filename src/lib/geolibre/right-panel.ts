@@ -231,30 +231,26 @@ function buildUI<TControl extends GeoLibreControl>(
       const elevation = new Float32Array(rawRaster.length);
       for (let i = 0; i < rawRaster.length; i++) elevation[i] = rawRaster[i];
 
-      // geotiff.js does not expose typed properties for GDAL_NODATA / ModelPixelScale
-      // etc. on the public TypeScript interface, so we use a loose cast.
-      const fd = image.getFileDirectory() as unknown as Record<string, unknown>;
-      const noDataValue = fd['GDAL_NODATA'] != null ? parseFloat(String(fd['GDAL_NODATA'])) : -9999;
+      const fd = image.getFileDirectory() as unknown as {
+        getValue?: (tag: string) => unknown;
+      } & Record<string, unknown>;
 
-      const pixelScale = fd['ModelPixelScale'] as number[] | undefined;
-      const tiepoint = fd['ModelTiepoint'] as number[] | undefined;
+      const noDataValueRaw = fd.getValue?.('GDAL_NODATA') ?? fd['GDAL_NODATA'];
+      const noDataValue = noDataValueRaw != null ? parseFloat(String(noDataValueRaw)) : -9999;
+
+      const pixelScale = fd.getValue?.('ModelPixelScale') as number[] | undefined ?? (fd['ModelPixelScale'] as number[] | undefined);
+      const tiepoint = fd.getValue?.('ModelTiepoint') as number[] | undefined ?? (fd['ModelTiepoint'] as number[] | undefined);
       const scaleX = pixelScale ? pixelScale[0] : 1.0;
       const scaleY = pixelScale ? -pixelScale[1] : -1.0; // south-positive → negative
       const originX = tiepoint ? tiepoint[3] : 0.0;
       const originY = tiepoint ? tiepoint[4] : 0.0;
 
-      // Extract EPSG code from GeoKeyDirectory
-      const geoKeys = fd['GeoKeyDirectory'] as number[] | undefined;
+      const geoKeys = (image as any).getGeoKeys?.();
       let crsCode = 3857;
-      if (geoKeys) {
-        const numKeys = geoKeys[3];
-        for (let i = 0; i < numKeys; i++) {
-          const keyId = geoKeys[4 + i * 4];
-          if (keyId === 3072 || keyId === 2048) {
-            crsCode = geoKeys[4 + i * 4 + 3];
-            break;
-          }
-        }
+      if (geoKeys?.ProjectedCSTypeGeoKey) {
+        crsCode = geoKeys.ProjectedCSTypeGeoKey;
+      } else if (geoKeys?.GeographicTypeGeoKey) {
+        crsCode = geoKeys.GeographicTypeGeoKey;
       }
 
       currentDem = {
@@ -271,6 +267,13 @@ function buildUI<TControl extends GeoLibreControl>(
       badge1.className = 'wd-badge wd-badge--ok';
       badge1.textContent = 'Loaded';
       fileNameEl.textContent = `${file.name} — ${width} × ${height} px`;
+
+      const sourceDemUrl = URL.createObjectURL(file);
+      createdObjectUrls.push(sourceDemUrl);
+      await app.addCogLayer?.('Source DEM', sourceDemUrl, {
+        colormap: 'terrain',
+        nodata: noDataValue,
+      });
     } catch (err) {
       fileNameEl.textContent = '⚠ Failed to read GeoTIFF';
       badge1.className = 'wd-badge wd-badge--error';
@@ -303,19 +306,43 @@ function buildUI<TControl extends GeoLibreControl>(
     'Max depression depth to fill (0 = unlimited)',
   ]);
 
-  // Threshold slider
+  // Threshold slider + number input
   const thresholdInput = el('input', {
     type: 'range',
     id: 'wd-threshold',
     className: 'wd-input',
-    min: '10',
+    min: '0',
     max: '5000',
     value: '500',
-    step: '10',
+    step: '1',
+  });
+  const thresholdNumberInput = el('input', {
+    type: 'number',
+    id: 'wd-threshold-number',
+    className: 'wd-input',
+    min: '0',
+    max: '5000',
+    value: '500',
+    step: '1',
   });
   const thresholdLabel = el('span', { className: 'wd-value-label' }, ['500 cells']);
+
+  const thresholdControl = el('div', { className: 'wd-threshold-control' }, [thresholdInput, thresholdNumberInput]);
+
+  function updateThresholdDisplay(value: number): void {
+    const clamped = Math.max(0, Math.min(5000, Math.round(value)));
+    thresholdInput.value = String(clamped);
+    thresholdNumberInput.value = String(clamped);
+    thresholdLabel.textContent = `${clamped} cells`;
+  }
+
   thresholdInput.addEventListener('input', () => {
-    thresholdLabel.textContent = `${thresholdInput.value} cells`;
+    updateThresholdDisplay(parseInt(thresholdInput.value, 10));
+  });
+
+  thresholdNumberInput.addEventListener('change', () => {
+    const parsed = parseInt(thresholdNumberInput.value, 10);
+    updateThresholdDisplay(Number.isNaN(parsed) ? 0 : parsed);
   });
 
   const progressEl = el('div', { className: 'wd-progress' });
@@ -437,7 +464,7 @@ function buildUI<TControl extends GeoLibreControl>(
   secPipeline.append(
     makeRow('Z-Limit', zLimitInput),
     zNote,
-    makeRow('Stream Threshold', thresholdInput, thresholdLabel),
+    makeRow('Stream Threshold', thresholdControl, thresholdLabel),
     el('div', { className: 'wd-btn-row' }, [runBtn]),
     progressEl,
     downloadRow,

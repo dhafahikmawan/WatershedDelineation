@@ -18,7 +18,7 @@ export function writeFloat32GeoTIFF(
   geotransform: [number, number, number, number, number, number],
   crsCode: number = 3857,
 ): ArrayBuffer {
-  const isGeographic = crsCode === 4326;
+  const isGeographic = crsCode === 4326 || (crsCode >= 4000 && crsCode < 5000);
   // GeographicTypeGeoKey (2048) for geographic CRS, ProjectedCSTypeGeoKey (3072) for projected
   const crsKey = isGeographic ? 2048 : 3072;
 
